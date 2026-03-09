@@ -41,6 +41,28 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+function sanitizeUrl(url) {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return "";
+}
+
+function renderMarkdown(text) {
+  let html = escapeHtml(text);
+
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+    const safeUrl = sanitizeUrl(url);
+    if (!safeUrl) return label;
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  });
+
+  return html.replace(/\n/g, "<br>");
+}
+
 function renderNotes(notes) {
   const list = document.getElementById("notesList");
   const count = document.getElementById("count");
@@ -55,7 +77,7 @@ function renderNotes(notes) {
     .slice().reverse()
     .map((note) => `
       <div class="note-item" data-id="${note.id}">
-        <div class="note-text">${escapeHtml(note.text)}</div>
+        <div class="note-text">${renderMarkdown(note.text)}</div>
         <div class="note-meta">${formatDate(note.createdAt)}</div>
         <button class="delete-btn" data-id="${note.id}" title="削除">×</button>
       </div>
