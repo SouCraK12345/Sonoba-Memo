@@ -65,14 +65,18 @@ function renderInlineMarkdown(text) {
 
 function renderMarkdown(text) {
   const codeBlocks = [];
-  const codeBlockTokenized = text.replace(/```([\w-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+
+  const tokenizeBlock = (lang, code) => {
     const id = codeBlocks.length;
     codeBlocks.push({
       lang: escapeHtml(lang || ""),
       code: escapeHtml((code || "").replace(/\n$/, "")),
     });
-    return `__CODEBLOCK_${id}__`;
-  });
+    return `\n__CODEBLOCK_${id}__\n`;
+  };
+
+  const withStandardFence = text.replace(/```([\w-]*)\n?([\s\S]*?)```/g, (_, lang, code) => tokenizeBlock(lang, code));
+  const codeBlockTokenized = withStandardFence.replace(/([\w-]+)```\n?([\s\S]*?)```/g, (_, lang, code) => tokenizeBlock(lang, code));
 
   const escaped = escapeHtml(codeBlockTokenized);
   const lines = escaped.split("\n");
@@ -86,13 +90,24 @@ function renderMarkdown(text) {
     }
   };
 
+  const renderCodeToken = (idText) => {
+    const block = codeBlocks[Number(idText)];
+    if (!block) return "";
+    const langClass = block.lang ? ` class="language-${block.lang}"` : "";
+    return `<pre><code${langClass}>${block.code}</code></pre>`;
+  };
+
   lines.forEach((line) => {
-    const codeBlockMatch = line.trim().match(/^__CODEBLOCK_(\d+)__$/);
-    if (codeBlockMatch) {
+    const exactToken = line.trim().match(/^__CODEBLOCK_(\d+)__$/);
+    if (exactToken) {
       closeList();
-      const block = codeBlocks[Number(codeBlockMatch[1])];
-      const langClass = block.lang ? ` class="language-${block.lang}"` : "";
-      parts.push(`<pre><code${langClass}>${block.code}</code></pre>`);
+      parts.push(renderCodeToken(exactToken[1]));
+      return;
+    }
+
+    if (line.includes("__CODEBLOCK_")) {
+      closeList();
+      parts.push(line.replace(/__CODEBLOCK_(\d+)__/g, (_, id) => renderCodeToken(id)));
       return;
     }
 
