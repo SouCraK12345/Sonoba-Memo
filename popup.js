@@ -48,8 +48,8 @@ function sanitizeUrl(url) {
   return "";
 }
 
-function renderMarkdown(text) {
-  let html = escapeHtml(text);
+function renderInlineMarkdown(text) {
+  let html = text;
 
   html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
@@ -60,7 +60,75 @@ function renderMarkdown(text) {
     return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
   });
 
-  return html.replace(/\n/g, "<br>");
+  return html;
+}
+
+function renderMarkdown(text) {
+  const codeBlocks = [];
+  const codeBlockTokenized = text.replace(/```([\w-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+    const id = codeBlocks.length;
+    codeBlocks.push({
+      lang: escapeHtml(lang || ""),
+      code: escapeHtml((code || "").replace(/\n$/, "")),
+    });
+    return `__CODEBLOCK_${id}__`;
+  });
+
+  const escaped = escapeHtml(codeBlockTokenized);
+  const lines = escaped.split("\n");
+  const parts = [];
+  let listType = null;
+
+  const closeList = () => {
+    if (listType) {
+      parts.push(listType === "ul" ? "</ul>" : "</ol>");
+      listType = null;
+    }
+  };
+
+  lines.forEach((line) => {
+    const codeBlockMatch = line.trim().match(/^__CODEBLOCK_(\d+)__$/);
+    if (codeBlockMatch) {
+      closeList();
+      const block = codeBlocks[Number(codeBlockMatch[1])];
+      const langClass = block.lang ? ` class="language-${block.lang}"` : "";
+      parts.push(`<pre><code${langClass}>${block.code}</code></pre>`);
+      return;
+    }
+
+    const ulMatch = line.match(/^[-*]\s+(.+)$/);
+    if (ulMatch) {
+      if (listType !== "ul") {
+        closeList();
+        parts.push("<ul>");
+        listType = "ul";
+      }
+      parts.push(`<li>${renderInlineMarkdown(ulMatch[1])}</li>`);
+      return;
+    }
+
+    const olMatch = line.match(/^\d+\.\s+(.+)$/);
+    if (olMatch) {
+      if (listType !== "ol") {
+        closeList();
+        parts.push("<ol>");
+        listType = "ol";
+      }
+      parts.push(`<li>${renderInlineMarkdown(olMatch[1])}</li>`);
+      return;
+    }
+
+    closeList();
+    if (line.trim() === "") {
+      parts.push("<br>");
+      return;
+    }
+
+    parts.push(`<div class="md-line">${renderInlineMarkdown(line)}</div>`);
+  });
+
+  closeList();
+  return parts.join("");
 }
 
 function renderNotes(notes) {

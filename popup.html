@@ -49,6 +49,14 @@
       padding-right: 20px; color: #d1d5db;
     }
     .note-text a { color: #93c5fd; text-decoration: underline; }
+    .note-text .md-line { display: block; }
+    .note-text ul, .note-text ol { margin: 4px 0 6px 18px; padding-left: 8px; }
+    .note-text li { margin: 1px 0; }
+    .note-text pre {
+      background: #0b1220; border: 1px solid #334155;
+      border-radius: 6px; padding: 6px 8px; margin: 4px 0;
+      overflow-x: auto; white-space: pre;
+    }
     .note-text code {
       background: #23233d; border: 1px solid #3d3d6b;
       border-radius: 4px; padding: 1px 4px; font-size: 12px;
@@ -69,7 +77,7 @@
     <span class="count" id="count"></span>
   </header>
   <div class="input-area">
-    <textarea id="noteInput" placeholder="Markdown対応: **太字** *斜体* `code` [link](https://...)" maxlength="500"></textarea>
+    <textarea id="noteInput" placeholder="Markdown対応: **太字** *斜体* `code` - a 1. b ```py ...```" maxlength="500"></textarea>
     <button class="save-btn" id="saveBtn">保存</button>
   </div>
   <div class="notes-list" id="notesList"></div>
