@@ -41,6 +41,111 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+function sanitizeUrl(url) {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return "";
+}
+
+function renderInlineMarkdown(text) {
+  let html = text;
+
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+    const safeUrl = sanitizeUrl(url);
+    if (!safeUrl) return label;
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  });
+
+  return html;
+}
+
+function renderMarkdown(text) {
+  const codeBlocks = [];
+
+  const tokenizeBlock = (lang, code) => {
+    const id = codeBlocks.length;
+    codeBlocks.push({
+      lang: escapeHtml(lang || ""),
+      code: escapeHtml((code || "").replace(/\n$/, "")),
+    });
+    return `\n__CODEBLOCK_${id}__\n`;
+  };
+
+  const withStandardFence = text.replace(/```([\w-]*)\n?([\s\S]*?)```/g, (_, lang, code) => tokenizeBlock(lang, code));
+  const codeBlockTokenized = withStandardFence.replace(/([\w-]+)```\n?([\s\S]*?)```/g, (_, lang, code) => tokenizeBlock(lang, code));
+
+  const escaped = escapeHtml(codeBlockTokenized);
+  const lines = escaped.split("\n");
+  const parts = [];
+  let listType = null;
+
+  const closeList = () => {
+    if (listType) {
+      parts.push(listType === "ul" ? "</ul>" : "</ol>");
+      listType = null;
+    }
+  };
+
+  const renderCodeToken = (idText) => {
+    const block = codeBlocks[Number(idText)];
+    if (!block) return "";
+    const langClass = block.lang ? ` class="language-${block.lang}"` : "";
+    return `<pre><code${langClass}>${block.code}</code></pre>`;
+  };
+
+  lines.forEach((line) => {
+    const exactToken = line.trim().match(/^__CODEBLOCK_(\d+)__$/);
+    if (exactToken) {
+      closeList();
+      parts.push(renderCodeToken(exactToken[1]));
+      return;
+    }
+
+    if (line.includes("__CODEBLOCK_")) {
+      closeList();
+      parts.push(line.replace(/__CODEBLOCK_(\d+)__/g, (_, id) => renderCodeToken(id)));
+      return;
+    }
+
+    const ulMatch = line.match(/^[-*]\s+(.+)$/);
+    if (ulMatch) {
+      if (listType !== "ul") {
+        closeList();
+        parts.push("<ul>");
+        listType = "ul";
+      }
+      parts.push(`<li>${renderInlineMarkdown(ulMatch[1])}</li>`);
+      return;
+    }
+
+    const olMatch = line.match(/^\d+\.\s+(.+)$/);
+    if (olMatch) {
+      if (listType !== "ol") {
+        closeList();
+        parts.push("<ol>");
+        listType = "ol";
+      }
+      parts.push(`<li>${renderInlineMarkdown(olMatch[1])}</li>`);
+      return;
+    }
+
+    closeList();
+    if (line.trim() === "") {
+      parts.push("<br>");
+      return;
+    }
+
+    parts.push(`<div class="md-line">${renderInlineMarkdown(line)}</div>`);
+  });
+
+  closeList();
+  return parts.join("");
+}
+
 function renderNotes(notes) {
   const list = document.getElementById("notesList");
   const count = document.getElementById("count");
@@ -55,7 +160,7 @@ function renderNotes(notes) {
     .slice().reverse()
     .map((note) => `
       <div class="note-item" data-id="${note.id}">
-        <div class="note-text">${escapeHtml(note.text)}</div>
+        <div class="note-text">${renderMarkdown(note.text)}</div>
         <div class="note-meta">${formatDate(note.createdAt)}</div>
         <button class="delete-btn" data-id="${note.id}" title="削除">×</button>
       </div>
